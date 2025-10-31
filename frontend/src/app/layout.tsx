@@ -30,7 +30,7 @@ export default function RootLayout({
       <body
         className={`${playfair.variable} ${poppins.variable} font-sans antialiased bg-white text-neutral-900`}
       >
-        <main className="md:px-5 p-1 ">
+        <main className=" ">
 
         {children}
         </main>

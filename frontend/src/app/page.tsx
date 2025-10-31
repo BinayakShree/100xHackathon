@@ -4,7 +4,7 @@ import HighlightSection from '@/components/section/HighlightSection'
 
 const Home = () => {
   return (
-    <div>
+    <div className='md:px-5 p-1'>
       <HeroSection/>
       <HighlightSection />
     </div>
