@@ -37,7 +37,7 @@ export function LoginForm() {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.message || "Login failed")
+        throw new Error(errorData.error || errorData.message || "Login failed")
       }
 
       // Handle successful login
@@ -53,10 +53,10 @@ export function LoginForm() {
         // Redirect based on user role
         if (responseData.user.role === "TUTOR") {
           console.log("Redirecting to tutor dashboard")
-          router.push("/dashboard/tutor")
+          router.replace("/dashboard/tutor")
         } else {
           console.log("Redirecting to tourist dashboard")
-          router.push("/dashboard/tourist")
+          router.replace("/dashboard/tourist")
         }
       } else {
         throw new Error("Invalid response from server")
