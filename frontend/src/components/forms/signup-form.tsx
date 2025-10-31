@@ -5,19 +5,19 @@ import { User, Phone, MapPin, Mail, Lock } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import Link from "next/link"
 
-type UserRole = "tourist" | "tutor"
+type UserRole = "TOURIST" | "TUTOR"
 
 interface SignUpFormData {
-  username: string
-  phoneNumber: string
-  location: string
+  name: string
+  phone: string
+  country: string
   email: string
   password: string
   role: UserRole
 }
 
 export function SignUpForm() {
-  const [role, setRole] = useState<UserRole>("tourist")
+  const [role, setRole] = useState<UserRole>("TOURIST")
   const [isLoading, setIsLoading] = useState(false)
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -26,9 +26,9 @@ export function SignUpForm() {
 
     const formData = new FormData(event.currentTarget)
     const data: SignUpFormData = {
-      username: formData.get("username") as string,
-      phoneNumber: formData.get("phoneNumber") as string,
-      location: formData.get("location") as string,
+      name: formData.get("name") as string,
+      phone: formData.get("phone") as string,
+      country: formData.get("country") as string,
       email: formData.get("email") as string,
       password: formData.get("password") as string,
       role: role,
@@ -36,13 +36,13 @@ export function SignUpForm() {
 
     try {
       // TODO: Add your API endpoint here
-      // const response = await fetch("/api/auth/signup", {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify(data),
-      // })
+      const response = await fetch("http://localhost:3000/api/auth/registerUser", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
 
-      // if (!response.ok) throw new Error("Signup failed")
+      if (!response.ok) throw new Error("Signup failed")
 
       // Redirect or handle successful signup
       console.log("Form submitted:", data)
@@ -59,9 +59,9 @@ export function SignUpForm() {
       <div className="flex gap-4 mb-8">
         <button
           type="button"
-          onClick={() => setRole("tourist")}
+          onClick={() => setRole("TOURIST")}
           className={`flex-1 h-[45px] rounded-[20px] border border-[#838383] font-medium text-xl transition-colors ${
-            role === "tourist"
+            role === "TOURIST"
               ? "bg-white text-black"
               : "bg-transparent text-black/60"
           }`}
@@ -70,9 +70,9 @@ export function SignUpForm() {
         </button>
         <button
           type="button"
-          onClick={() => setRole("tutor")}
+            onClick={() => setRole("TUTOR")}
           className={`flex-1 h-[45px] rounded-[20px] border border-[#838383] font-medium text-xl transition-colors ${
-            role === "tutor" ? "bg-black text-white" : "bg-transparent text-black/60"
+            role === "TUTOR" ? "bg-black text-white" : "bg-transparent text-black/60"
           }`}
         >
           Tutor
@@ -84,8 +84,8 @@ export function SignUpForm() {
         <div className="relative">
           <User className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
           <Input
-            placeholder="Username"
-            name="username"
+            placeholder="Name"
+            name="name"
             className="pl-10"
             required
             disabled={isLoading}
@@ -95,8 +95,8 @@ export function SignUpForm() {
         <div className="relative">
           <Phone className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
           <Input
-            placeholder="Phone Number"
-            name="phoneNumber"
+            placeholder="Phone"
+            name="phone"
             type="tel"
             className="pl-10"
             required
@@ -107,8 +107,8 @@ export function SignUpForm() {
         <div className="relative">
           <MapPin className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
           <Input
-            placeholder="Location"
-            name="location"
+              placeholder="Country"
+            name="country"
             className="pl-10"
             required
             disabled={isLoading}
