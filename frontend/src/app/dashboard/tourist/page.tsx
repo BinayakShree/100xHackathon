@@ -2,130 +2,68 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Search, MapPin, Clock, Users, Star, LogOut, BookOpen } from "lucide-react"
+import { Search, MapPin, Clock, LogOut, BookOpen, AlertCircle, X } from "lucide-react"
 import Image from "next/image"
 import { getToken, getUser, logout } from "@/lib/auth"
+import { courseApi } from "@/lib/api"
 
 interface Course {
   id: string
   title: string
   description: string
-  category: string
+  category?: { id: string; name: string }
   price: number
-  duration: number
-  maxStudents: number
-  location: string
-  imageUrl?: string
-  tutor: {
-    name: string
-  }
+  duration: string
+  level: string
+  location?: string
+  prerequisite?: string
+  photos?: Array<{ url: string }>
+  tutor?: { name: string }
+  createdAt: string
 }
 
 export default function TouristDashboard() {
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("All")
+  const [selectedLevel, setSelectedLevel] = useState("All")
+  const [isMounted, setIsMounted] = useState(false)
   const router = useRouter()
-
-  // Mock data - Replace with actual API call when backend is ready
-  const mockCourses: Course[] = [
-    {
-      id: "1",
-      title: "Traditional Pottery Workshop",
-      description: "Learn ancient pottery techniques from master artisans in the heart of Kathmandu",
-      category: "Arts & Crafts",
-      price: 45,
-      duration: 3,
-      maxStudents: 12,
-      location: "Kathmandu, Nepal",
-      imageUrl: "/pottery.png",
-      tutor: { name: "Rajesh Thapa" }
-    },
-    {
-      id: "2",
-      title: "Nepalese Cooking Class",
-      description: "Master authentic Nepalese recipes in a hands-on cooking experience",
-      category: "Cooking",
-      price: 35,
-      duration: 2,
-      maxStudents: 8,
-      location: "Pokhara, Nepal",
-      imageUrl: "/cooking.png",
-      tutor: { name: "Sita Gurung" }
-    },
-    {
-      id: "3",
-      title: "Traditional Dance Performance",
-      description: "Experience vibrant traditional dances and learn basic steps",
-      category: "Dance",
-      price: 25,
-      duration: 1.5,
-      maxStudents: 20,
-      location: "Bhaktapur, Nepal",
-      imageUrl: "/dancing.png",
-      tutor: { name: "Prem Shrestha" }
-    },
-    {
-      id: "4",
-      title: "Heritage Walking Tour",
-      description: "Explore UNESCO World Heritage sites with local guides",
-      category: "Tours",
-      price: 30,
-      duration: 4,
-      maxStudents: 15,
-      location: "Kathmandu Valley",
-      imageUrl: "/walk.png",
-      tutor: { name: "Gopal Adhikari" }
-    },
-    {
-      id: "5",
-      title: "Museum & History Tour",
-      description: "Discover Nepal's rich history through guided museum visits",
-      category: "Tours",
-      price: 20,
-      duration: 2,
-      maxStudents: 25,
-      location: "Kathmandu",
-      imageUrl: "/museum.png",
-      tutor: { name: "Laxmi Bhandari" }
-    }
-  ]
-
-  const categories = ["All", "Arts & Crafts", "Cooking", "Dance", "Tours"]
+  
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   useEffect(() => {
-    // Check if user is authenticated
+    if (!isMounted) return
+    
     const token = getToken()
     const user = getUser()
     
     if (!token || !user) {
-      router.push("/auth/login")
+      router.replace("/auth/login")
       return
     }
 
-    // TODO: Replace with actual API call
-    // const fetchCourses = async () => {
-    //   try {
-    //     const response = await fetch("http://localhost:3000/api/courses", {
-    //       headers: { "Authorization": `Bearer ${token}` }
-    //     })
-    //     const data = await response.json()
-    //     setCourses(data)
-    //   } catch (error) {
-    //     console.error("Error fetching courses:", error)
-    //   } finally {
-    //     setLoading(false)
-    //   }
-    // }
-    // fetchCourses()
+    fetchCourses()
+  }, [isMounted])
 
-    // Using mock data for now
-    setTimeout(() => {
-      setCourses(mockCourses)
+  const fetchCourses = async () => {
+    try {
+      setLoading(true)
+      setError("")
+      const response = await courseApi.getAll()
+      setCourses(response.courses || [])
+    } catch (err: any) {
+      console.error("Error fetching courses:", err)
+      setError("Failed to load courses. Make sure the backend server is running.")
+      setCourses([])
+    } finally {
       setLoading(false)
-    }, 500)
-  }, [router])
+    }
+  }
 
   const handleLogout = () => {
     logout()
@@ -135,18 +73,23 @@ export default function TouristDashboard() {
   const filteredCourses = courses.filter(course => {
     const matchesSearch = course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          course.description.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = selectedCategory === "All" || course.category === selectedCategory
-    return matchesSearch && matchesCategory
+    const matchesCategory = selectedCategory === "All" || course.category?.name === selectedCategory
+    const matchesLevel = selectedLevel === "All" || course.level === selectedLevel
+    return matchesSearch && matchesCategory && matchesLevel
   })
+
+  // Get unique categories from courses
+  const categories = ["All", ...new Set(courses.map(c => c.category?.name).filter(Boolean) as string[])]
 
   const user = getUser() || { name: "" }
 
-  if (loading) {
+  if (loading && courses.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading courses...</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-black border-t-transparent mx-auto"></div>
+          <p className="mt-6 text-lg text-gray-600 font-medium">Loading amazing experiences...</p>
+          <p className="mt-2 text-sm text-gray-500">Please wait a moment</p>
         </div>
       </div>
     )
@@ -179,7 +122,7 @@ export default function TouristDashboard() {
       </header>
 
       {/* Hero Section */}
-      <div className="bg-gradient-to-r from-black to-gray-800 text-white py-16">
+      <div className="bg-linear-to-r from-black to-gray-800 text-white py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-4xl md:text-5xl font-bold font-['Playfair_Display:Medium'] mb-4">
             Discover Authentic Experiences
@@ -192,6 +135,18 @@ export default function TouristDashboard() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {error && (
+          <div className="mb-8 p-4 rounded-lg bg-red-50 border border-red-200 flex items-start">
+            <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 mr-3 shrink-0" />
+            <div className="flex-1">
+              <p className="text-red-800 font-medium">{error}</p>
+            </div>
+            <button onClick={() => setError("")} className="text-red-600 hover:text-red-800">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        )}
+
         {/* Search and Filter */}
         <div className="mb-8 space-y-4">
           <div className="relative">
@@ -206,26 +161,65 @@ export default function TouristDashboard() {
           </div>
           
           <div className="flex gap-3 flex-wrap">
-            {categories.map((category) => (
-              <button
-                key={category}
-                onClick={() => setSelectedCategory(category)}
-                className={`px-6 py-2 rounded-full font-medium transition-colors ${
-                  selectedCategory === category
-                    ? "bg-black text-white"
-                    : "bg-white text-gray-700 hover:bg-gray-100 border border-gray-300"
-                }`}
+            <div className="flex-1 min-w-[200px]">
+              <p className="text-sm text-gray-600 mb-2">Category</p>
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="w-full px-4 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black"
               >
-                {category}
-              </button>
-            ))}
+                {categories.map((category) => (
+                  <option key={category} value={category}>{category}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <p className="text-sm text-gray-600 mb-2">Level</p>
+              <select
+                value={selectedLevel}
+                onChange={(e) => setSelectedLevel(e.target.value)}
+                className="w-full px-4 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black"
+              >
+                <option value="All">All Levels</option>
+                <option value="BEGINNER">Beginner</option>
+                <option value="INTERMEDIATE">Intermediate</option>
+                <option value="ADVANCED">Advanced</option>
+              </select>
+            </div>
           </div>
         </div>
 
         {/* Courses Grid */}
-        {filteredCourses.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-xl text-gray-600">No courses found matching your criteria.</p>
+        {courses.length === 0 ? (
+          <div className="bg-white rounded-2xl p-16 text-center shadow-sm">
+            <div className="bg-linear-to-br from-gray-100 to-gray-200 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6">
+              <BookOpen className="h-12 w-12 text-gray-400" />
+            </div>
+            <h4 className="text-2xl font-bold text-gray-800 mb-2">No courses available yet</h4>
+            <p className="text-gray-600 mb-6 max-w-md mx-auto">
+              It looks like there are no courses available at the moment. Check back later or contact us to learn more!
+            </p>
+          </div>
+        ) : filteredCourses.length === 0 ? (
+          <div className="bg-white rounded-2xl p-16 text-center shadow-sm">
+            <div className="bg-linear-to-br from-blue-100 to-blue-200 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Search className="h-12 w-12 text-blue-400" />
+            </div>
+            <h4 className="text-2xl font-bold text-gray-800 mb-2">No courses found</h4>
+            <p className="text-gray-600 mb-6 max-w-md mx-auto">
+              No courses match your search criteria. Try adjusting your filters or search terms.
+            </p>
+            <button
+              onClick={() => {
+                setSearchTerm("")
+                setSelectedCategory("All")
+                setSelectedLevel("All")
+              }}
+              className="inline-flex items-center space-x-2 px-6 py-3 bg-black text-white rounded-xl font-semibold hover:bg-gray-800 transition-colors"
+            >
+              <Search className="h-5 w-5" />
+              <span>Clear Filters</span>
+            </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -235,15 +229,14 @@ export default function TouristDashboard() {
                 className="bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow cursor-pointer group"
               >
                 <div className="relative h-48 w-full">
-                  {course.imageUrl ? (
-                    <Image
-                      src={course.imageUrl}
+                  {course.photos && course.photos.length > 0 ? (
+                    <img
+                      src={course.photos[0].url}
                       alt={course.title}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-transform duration-300"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                   ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+                    <div className="w-full h-full bg-linear-to-br from-gray-200 to-gray-300 flex items-center justify-center">
                       <BookOpen className="h-16 w-16 text-gray-400" />
                     </div>
                   )}
@@ -253,9 +246,16 @@ export default function TouristDashboard() {
                 </div>
                 
                 <div className="p-6">
-                  <span className="inline-block bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm font-medium mb-2">
-                    {course.category}
-                  </span>
+                  <div className="flex items-center gap-2 mb-2">
+                    {course.category && (
+                      <span className="inline-block bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm font-medium">
+                        {course.category.name}
+                      </span>
+                    )}
+                    <span className="inline-block bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
+                      {course.level}
+                    </span>
+                  </div>
                   <h3 className="text-xl font-bold mb-2 group-hover:text-black/80 transition-colors">
                     {course.title}
                   </h3>
@@ -264,22 +264,25 @@ export default function TouristDashboard() {
                   </p>
                   
                   <div className="space-y-2 mb-4">
-                    <div className="flex items-center text-sm text-gray-600">
-                      <MapPin className="h-4 w-4 mr-2" />
-                      {course.location}
-                    </div>
+                    {course.location && (
+                      <div className="flex items-center text-sm text-gray-600">
+                        <MapPin className="h-4 w-4 mr-2" />
+                        {course.location}
+                      </div>
+                    )}
                     <div className="flex items-center text-sm text-gray-600">
                       <Clock className="h-4 w-4 mr-2" />
-                      {course.duration} hours
+                      {course.duration}
                     </div>
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Users className="h-4 w-4 mr-2" />
-                      Max {course.maxStudents} students
-                    </div>
+                    {course.tutor && (
+                      <div className="flex items-center text-sm text-gray-600">
+                        <span className="text-gray-600 font-medium">Instructor: {course.tutor.name}</span>
+                      </div>
+                    )}
                   </div>
                   
                   <button className="w-full bg-black text-white py-3 rounded-xl font-semibold hover:bg-gray-800 transition-colors">
-                    Enroll Now
+                    View Details
                   </button>
                 </div>
               </div>
