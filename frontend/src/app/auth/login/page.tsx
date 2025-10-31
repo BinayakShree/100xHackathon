@@ -1,7 +1,7 @@
 import Image from "next/image"
-import { SignUpForm } from "@/components/forms/signup-form"
+import { LoginForm } from "@/components/forms/login-form"
 
-export default function SignupPage() {
+export default function LoginPage() {
   return (
     <div className="min-h-screen bg-white flex">
       {/* Left Section */}
@@ -15,12 +15,12 @@ export default function SignupPage() {
             Explore More. Experience Life.
           </p>
 
-          <SignUpForm />
+          <LoginForm />
         </div>
       </div>
 
       {/* Right Section - Hidden on mobile */}
-      <div className="hidden lg:block relative w-[calc(547px-5px)] bg-black">
+      <div className="hidden lg:block relative w-[547px] bg-black">
         <Image
           src="/auth.png"
           alt="Auth background"
