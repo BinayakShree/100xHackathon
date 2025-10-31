@@ -4,6 +4,7 @@ import { useState } from "react"
 import { User, Phone, MapPin, Mail, Lock } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 type UserRole = "TOURIST" | "TUTOR"
 
@@ -19,10 +20,15 @@ interface SignUpFormData {
 export function SignUpForm() {
   const [role, setRole] = useState<UserRole>("TOURIST")
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState(false)
+  const router = useRouter()
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setIsLoading(true)
+    setError("")
+    setSuccess(false)
 
     const formData = new FormData(event.currentTarget)
     const data: SignUpFormData = {
@@ -35,19 +41,24 @@ export function SignUpForm() {
     }
 
     try {
-      // TODO: Add your API endpoint here
       const response = await fetch("http://localhost:3000/api/auth/registerUser", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       })
 
-      if (!response.ok) throw new Error("Signup failed")
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Signup failed")
+      }
 
-      // Redirect or handle successful signup
-      console.log("Form submitted:", data)
+      setSuccess(true)
+      // Redirect to login page after 1.5 seconds
+      setTimeout(() => {
+        router.push("/auth/login")
+      }, 1500)
     } catch (error) {
-      console.error("Signup error:", error)
+      setError(error instanceof Error ? error.message : "Something went wrong")
     } finally {
       setIsLoading(false)
     }
@@ -55,6 +66,17 @@ export function SignUpForm() {
 
   return (
     <div className="w-full max-w-md">
+      {error && (
+        <div className="mb-4 p-3 rounded bg-red-50 text-red-600 text-sm">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="mb-4 p-3 rounded bg-green-50 text-green-600 text-sm">
+          Account created successfully! Redirecting to login...
+        </div>
+      )}
+      
       {/* User Type Selection */}
       <div className="flex gap-4 mb-8">
         <button
