@@ -1,11 +1,11 @@
 import { Router } from "express";
-import { createCourseController } from "../controllers/createCourseController";
 import { authorizeTutor } from "../middleware/authorizeTutor";
 import {
   deleteCourseController,
   getAllCoursesController,
   getCourseByIdController,
   updateCourseController,
+  createCourseController,
 } from "../controllers/courseController";
 const router = Router();
 router.post("/createCourse", authorizeTutor, createCourseController);
