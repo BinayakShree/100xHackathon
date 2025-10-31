@@ -17,9 +17,105 @@ model User {
   role      Role     @default(TOURIST)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Relations
+  courses   Course[] @relation("TutorCourses") // courses tutor owns
+  bookings  Booking[] @relation("TouristBookings") // bookings tourist made
 }
 
 enum Role {
   TOURIST
   TUTOR
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  courses   Course[]
+}
+
+model Course {
+  id           String        @id @default(cuid())
+  title        String
+  description  String
+  price        Float
+  duration     String        // e.g., "3 hours", "2 days", etc.
+  level        Level         @default(BEGINNER)
+  location     String?       // optional: city/town
+  prerequisite String?       // optional description of prerequisites
+  tutorId      String
+  categoryId   String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  // Relations
+  tutor       User          @relation("TutorCourses", fields: [tutorId], references: [id])
+  category    Category      @relation(fields: [categoryId], references: [id])
+  photos      CoursePhoto[]
+  bookings    Booking[]     @relation("CourseBookings") // bookings for this course
+}
+
+model CoursePhoto {
+  id        String   @id @default(cuid())
+  url       String
+  courseId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  course    Course   @relation(fields: [courseId], references: [id])
+}
+
+model Booking {
+  id          String          @id @default(cuid())
+  courseId    String
+  touristId   String
+  status      BookingStatus   @default(PENDING) // PENDING, CONFIRMED, DECLINED, RESCHEDULED
+  message     String?         // optional note/comment from tourist
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  // Relations
+  course         Course          @relation("CourseBookings", fields: [courseId], references: [id])
+  tourist        User            @relation("TouristBookings", fields: [touristId], references: [id])
+  options        BookingOption[] // multiple date/time options proposed by tourist
+  tutorResponse  TutorResponse?  // tutor's response / decision
+}
+
+model BookingOption {
+  id           String         @id @default(cuid())
+  bookingId    String
+  date         DateTime
+  time         String
+  createdAt    DateTime       @default(now())
+
+  booking      Booking        @relation(fields: [bookingId], references: [id])
+  tutorResponse TutorResponse? @relation("TutorSelectedOption") 
+}
+
+model TutorResponse {
+  id                 String         @id @default(cuid())
+  bookingId          String         @unique
+  selectedOptionId   String?        @unique // <-- must be unique for one-to-one
+  status             BookingStatus
+  message            String?        
+  createdAt          DateTime       @default(now())
+
+  booking            Booking        @relation(fields: [bookingId], references: [id])
+  selectedOption     BookingOption? @relation("TutorSelectedOption", fields: [selectedOptionId], references: [id])
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  DECLINED
+  RESCHEDULED
+}
+
+enum Level {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
 }
