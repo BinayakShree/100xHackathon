@@ -5,6 +5,7 @@ import { Mail, Lock } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { setAuth } from "@/lib/auth"
 
 interface LoginFormData {
   email: string
@@ -41,8 +42,25 @@ export function LoginForm() {
 
       // Handle successful login
       const responseData = await response.json()
-      // Redirect to dashboard or home page
-      router.push("/dashboard") // Update this to your desired redirect path
+      
+      console.log("Login response:", responseData)
+      
+      // Store JWT token and user data in localStorage
+      if (responseData.token && responseData.user) {
+        setAuth(responseData.token, responseData.user)
+        console.log("User role:", responseData.user.role)
+        
+        // Redirect based on user role
+        if (responseData.user.role === "TUTOR") {
+          console.log("Redirecting to tutor dashboard")
+          router.push("/dashboard/tutor")
+        } else {
+          console.log("Redirecting to tourist dashboard")
+          router.push("/dashboard/tourist")
+        }
+      } else {
+        throw new Error("Invalid response from server")
+      }
     } catch (error) {
       setError(error instanceof Error ? error.message : "Something went wrong")
     } finally {
