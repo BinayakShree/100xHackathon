@@ -100,10 +100,14 @@ export const tutorRespondBookingController = async (
 
     const booking = await prisma.booking.findUnique({
       where: { id },
-      include: { options: true },
+      include: {
+        options: true,
+        course: true, // <-- added
+      },
     });
 
     if (!booking) return res.status(404).json({ error: "Booking not found" });
+
     if (booking.course.tutorId !== req.user.id)
       return res
         .status(403)
@@ -121,7 +125,7 @@ export const tutorRespondBookingController = async (
     if (error.name === "ZodError")
       return res.status(400).json({ error: error.errors });
     console.error(error);
-    res.status(500).json({ error: "Failed to respond to booking" });
+    return res.status(500).json({ error: "Failed to respond to booking" });
   }
 };
 
