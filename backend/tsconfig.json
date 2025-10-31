@@ -1,7 +1,8 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "CommonJS",
+    "module": "ESNext",
+    "moduleResolution": "node",
     "lib": ["ESNext"],
     "outDir": "dist",
     "esModuleInterop": true,
@@ -10,6 +11,9 @@
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["**/*.ts"],   // include all .ts files in the project
-  "exclude": ["dist", "node_modules"]
+  "include": ["**/*.ts"],
+  "exclude": ["dist", "node_modules"],
+  "ts-node": {
+    "esm": true
+  }
 }
