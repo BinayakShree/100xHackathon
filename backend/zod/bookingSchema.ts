@@ -1,18 +1,12 @@
 import { z } from "zod";
 
-// Tourist creates booking with multiple options (date and time ranges)
+// Tourist creates booking with single timestamp (date and time range)
 export const createBookingSchema = z.object({
   courseId: z.string(),
   message: z.string().optional(),
-  options: z
-    .array(
-      z.object({
-        date: z.string().refine((d) => !isNaN(Date.parse(d)), "Invalid date"),
-        startTime: z.string().min(1, "Start time is required"),
-        endTime: z.string().min(1, "End time is required"),
-      })
-    )
-    .min(1, "At least one option is required"),
+  date: z.string().refine((d) => !isNaN(Date.parse(d)), "Invalid date"),
+  startTime: z.string().min(1, "Start time is required"),
+  endTime: z.string().min(1, "End time is required"),
 });
 
 // Tutor responds to booking

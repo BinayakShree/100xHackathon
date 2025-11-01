@@ -22,6 +22,10 @@ import {
 import { getUser, logout, isTutor, isAuthenticated } from "@/lib/auth";
 import { courseApi, bookingApi, categoryApi } from "@/lib/api";
 import { uploadImage } from "@/lib/cloudinary";
+import {
+  NotificationSheet,
+  useNotifications,
+} from "@/components/notifications";
 
 interface Course {
   id: string;
@@ -67,7 +71,20 @@ export default function TutorDashboard() {
   const [isMounted, setIsMounted] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [loadingBookings, setLoadingBookings] = useState(false);
+  const [isRespondingBooking, setIsRespondingBooking] = useState<string | null>(
+    null
+  );
   const router = useRouter();
+
+  // Notifications
+  const {
+    notifications,
+    isOpen: isNotificationOpen,
+    addNotification,
+    removeNotification,
+    clearAll: clearAllNotifications,
+    toggleSheet: toggleNotificationSheet,
+  } = useNotifications();
 
   const [formData, setFormData] = useState({
     title: "",
@@ -101,7 +118,7 @@ export default function TutorDashboard() {
           return prev;
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching categories:", err);
       setError("Failed to load categories");
     } finally {
@@ -135,7 +152,7 @@ export default function TutorDashboard() {
     fetchCategories();
     fetchMyCourses();
     fetchBookings();
-  }, [isMounted, router, fetchCategories]);
+  }, [isMounted, router, fetchCategories]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchMyCourses = async () => {
     try {
@@ -149,9 +166,10 @@ export default function TutorDashboard() {
       } else {
         setCourses([]);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching courses:", err);
-      if (!err.message.includes("404")) {
+      const error = err as { message?: string };
+      if (!error.message?.includes("404")) {
         setError("Failed to load courses");
       }
       setCourses([]);
@@ -164,8 +182,29 @@ export default function TutorDashboard() {
     try {
       setLoadingBookings(true);
       const response = await bookingApi.getTutorBookings();
-      setBookings(response.bookings || []);
-    } catch (err: any) {
+      const newBookings = response.bookings || [];
+
+      // Check for new pending bookings and notify
+      const pendingCount = newBookings.filter(
+        (b: Booking) => b.status === "PENDING"
+      ).length;
+      if (pendingCount > 0 && bookings.length > 0) {
+        const oldPendingCount = bookings.filter(
+          (b) => b.status === "PENDING"
+        ).length;
+        if (pendingCount > oldPendingCount) {
+          addNotification(
+            "info",
+            "New booking request",
+            `You have ${pendingCount} pending booking${
+              pendingCount > 1 ? "s" : ""
+            }`
+          );
+        }
+      }
+
+      setBookings(newBookings);
+    } catch (err: unknown) {
       console.error("Error fetching bookings:", err);
       setBookings([]);
     } finally {
@@ -250,18 +289,28 @@ export default function TutorDashboard() {
       setSelectedCourse(null);
       resetForm();
       fetchMyCourses();
-    } catch (err: any) {
+
+      // Show notification
+      addNotification(
+        "success",
+        isEditing ? "Course updated" : "Course created",
+        `Your course "${formData.title}" has been ${
+          isEditing ? "updated" : "created"
+        } successfully`
+      );
+    } catch (err: unknown) {
       console.error("Error saving course:", err);
-      if (err.message.includes("categoryId")) {
+      const error = err as { message?: string };
+      if (error.message?.includes("categoryId")) {
         setError(
           "Category is not set up in the database. Please run the seed script: npm run prisma:seed"
         );
-      } else if (err.message.includes("Unauthorized")) {
+      } else if (error.message?.includes("Unauthorized")) {
         setError(
           "Failed to save course: Missing authentication. Please log in again."
         );
       } else {
-        setError(err.message || "Failed to save course. Please try again.");
+        setError(error.message || "Failed to save course. Please try again.");
       }
     } finally {
       setIsSubmitting(false);
@@ -318,7 +367,14 @@ export default function TutorDashboard() {
         setShowDetails(false);
         setSelectedCourse(null);
       }
-    } catch (err: any) {
+
+      // Show notification
+      addNotification(
+        "success",
+        "Course deleted",
+        `Course "${course.title}" has been deleted successfully`
+      );
+    } catch (err: unknown) {
       console.error("Error deleting course:", err);
       alert("Failed to delete course. Please try again.");
     }
@@ -334,20 +390,39 @@ export default function TutorDashboard() {
     status: "CONFIRMED" | "DECLINED",
     selectedOptionId?: string
   ) => {
+    setIsRespondingBooking(bookingId);
     try {
       await bookingApi.tutorRespond(bookingId, {
         status,
-        selectedOptionId,
+        selectedOptionId: selectedOptionId || undefined,
         message:
           status === "CONFIRMED" ? "Looking forward to meeting you!" : "",
       });
+
       fetchBookings();
       if (selectedCourse) {
         setSelectedCourse({ ...selectedCourse }); // Trigger re-render
       }
-    } catch (err: any) {
+
+      // Show notification
+      const booking = bookings.find((b) => b.id === bookingId);
+      addNotification(
+        status === "CONFIRMED" ? "success" : "info",
+        `Booking ${status.toLowerCase()}`,
+        `You ${
+          status === "CONFIRMED" ? "accepted" : "declined"
+        } the booking request from ${booking?.tourist.name || "tourist"}`
+      );
+    } catch (err: unknown) {
       console.error("Error responding to booking:", err);
-      alert("Failed to respond to booking. Please try again.");
+      const error = err as { message?: string };
+      addNotification(
+        "error",
+        "Failed to respond",
+        error.message || "Failed to respond to booking. Please try again."
+      );
+    } finally {
+      setIsRespondingBooking(null);
     }
   };
 
@@ -385,6 +460,13 @@ export default function TutorDashboard() {
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-gray-700">Welcome, {user.name}!</span>
+              <NotificationSheet
+                notifications={notifications}
+                onClose={removeNotification}
+                onCloseAll={clearAllNotifications}
+                isOpen={isNotificationOpen}
+                onToggle={toggleNotificationSheet}
+              />
               <button
                 onClick={handleLogout}
                 className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-black text-white hover:bg-gray-800 transition-colors"
@@ -681,8 +763,8 @@ export default function TutorDashboard() {
                 No courses yet
               </h4>
               <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                Start sharing your expertise by creating your first course. It's
-                easy and takes just a few minutes!
+                Start sharing your expertise by creating your first course.
+                It&apos;s easy and takes just a few minutes!
               </p>
               <button
                 onClick={() => setShowForm(true)}
@@ -900,24 +982,34 @@ export default function TutorDashboard() {
 
                         {booking.message && (
                           <p className="text-sm text-gray-600 mb-3 bg-gray-50 p-3 rounded-lg">
-                            "{booking.message}"
+                            &ldquo;{booking.message}&rdquo;
                           </p>
                         )}
 
                         <div className="mb-3">
                           <p className="text-sm font-medium text-gray-700 mb-2">
-                            Available Times:
+                            Preferred Time:
                           </p>
                           <div className="space-y-1">
                             {booking.options.map((option) => (
                               <div
                                 key={option.id}
-                                className="flex items-center text-sm text-gray-600 bg-gray-50 p-2 rounded"
+                                className="flex items-center text-sm text-gray-600 bg-gray-50 p-3 rounded-lg"
                               >
-                                <Calendar className="h-4 w-4 mr-2" />
-                                {new Date(
-                                  option.date
-                                ).toLocaleDateString()} at {option.time}
+                                <Calendar className="h-4 w-4 mr-2 text-gray-500" />
+                                <span className="font-medium">
+                                  {new Date(option.date).toLocaleDateString(
+                                    "en-US",
+                                    {
+                                      weekday: "short",
+                                      year: "numeric",
+                                      month: "short",
+                                      day: "numeric",
+                                    }
+                                  )}
+                                </span>
+                                <span className="mx-2 text-gray-400">•</span>
+                                <span>{option.time}</span>
                               </div>
                             ))}
                           </div>
@@ -933,19 +1025,39 @@ export default function TutorDashboard() {
                                   booking.options[0]?.id
                                 )
                               }
-                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors"
+                              disabled={isRespondingBooking === booking.id}
+                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              <CheckCircle className="h-4 w-4" />
-                              Accept
+                              {isRespondingBooking === booking.id ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                  <span>Processing...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="h-4 w-4" />
+                                  <span>Accept</span>
+                                </>
+                              )}
                             </button>
                             <button
                               onClick={() =>
                                 handleBookingResponse(booking.id, "DECLINED")
                               }
-                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors"
+                              disabled={isRespondingBooking === booking.id}
+                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              <X className="h-4 w-4" />
-                              Reject
+                              {isRespondingBooking === booking.id ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                  <span>Processing...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <X className="h-4 w-4" />
+                                  <span>Reject</span>
+                                </>
+                              )}
                             </button>
                           </div>
                         )}

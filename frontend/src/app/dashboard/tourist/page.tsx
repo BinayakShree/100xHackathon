@@ -32,9 +32,13 @@ export default function TouristDashboard() {
   const [isMounted, setIsMounted] = useState(false)
   const [showBookingModal, setShowBookingModal] = useState(false)
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null)
-  const [bookingOptions, setBookingOptions] = useState([{ date: "", startTime: "", endTime: "" }])
+  const [bookingDate, setBookingDate] = useState("")
+  const [bookingStartTime, setBookingStartTime] = useState("")
+  const [bookingEndTime, setBookingEndTime] = useState("")
   const [bookingMessage, setBookingMessage] = useState("")
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false)
+  const [myBookings, setMyBookings] = useState<any[]>([])
+  const [loadingBookings, setLoadingBookings] = useState(false)
   const router = useRouter()
   
   useEffect(() => {
@@ -65,6 +69,7 @@ export default function TouristDashboard() {
     }
 
     fetchCourses()
+    fetchMyBookings()
   }, [isMounted, router])
 
   const fetchCourses = async () => {
@@ -73,12 +78,26 @@ export default function TouristDashboard() {
       setError("")
       const response = await courseApi.getAll()
       setCourses(response.courses || [])
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching courses:", err)
+      const error = err as { message?: string }
       setError("Failed to load courses. Make sure the backend server is running.")
       setCourses([])
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchMyBookings = async () => {
+    try {
+      setLoadingBookings(true)
+      const response = await bookingApi.getTouristBookings()
+      setMyBookings(response.bookings || [])
+    } catch (err: unknown) {
+      console.error("Error fetching bookings:", err)
+      setMyBookings([])
+    } finally {
+      setLoadingBookings(false)
     }
   }
 
@@ -90,35 +109,19 @@ export default function TouristDashboard() {
   const handleBookCourse = (course: Course) => {
     setSelectedCourse(course)
     setShowBookingModal(true)
-    setBookingOptions([{ date: "", startTime: "", endTime: "" }])
+    setBookingDate("")
+    setBookingStartTime("")
+    setBookingEndTime("")
     setBookingMessage("")
-  }
-
-  const addBookingOption = () => {
-    setBookingOptions([...bookingOptions, { date: "", startTime: "", endTime: "" }])
-  }
-
-  const removeBookingOption = (index: number) => {
-    setBookingOptions(bookingOptions.filter((_, i) => i !== index))
-  }
-
-  const updateBookingOption = (index: number, field: string, value: string) => {
-    const updated = [...bookingOptions]
-    updated[index] = { ...updated[index], [field]: value }
-    setBookingOptions(updated)
+    setError("")
   }
 
   const handleSubmitBooking = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedCourse) return
 
-    // Validate at least one option with all fields
-    const validOptions = bookingOptions.filter(
-      opt => opt.date && opt.startTime && opt.endTime
-    )
-
-    if (validOptions.length === 0) {
-      setError("Please add at least one date and time option")
+    if (!bookingDate || !bookingStartTime || !bookingEndTime) {
+      setError("Please fill in all required fields (date, start time, and end time)")
       return
     }
 
@@ -129,24 +132,47 @@ export default function TouristDashboard() {
       await bookingApi.create({
         courseId: selectedCourse.id,
         message: bookingMessage || undefined,
-        options: validOptions.map(opt => ({
-          date: opt.date,
-          startTime: opt.startTime,
-          endTime: opt.endTime,
-        })),
+        date: bookingDate,
+        startTime: bookingStartTime,
+        endTime: bookingEndTime,
       })
 
       setShowBookingModal(false)
       setSelectedCourse(null)
-      setBookingOptions([{ date: "", startTime: "", endTime: "" }])
+      setBookingDate("")
+      setBookingStartTime("")
+      setBookingEndTime("")
       setBookingMessage("")
+      
+      // Refresh bookings and courses
+      fetchMyBookings()
+      fetchCourses()
+      
+      // Show success notification
       alert("Booking request sent successfully! The tutor will review and respond.")
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error creating booking:", err)
-      setError(err.message || "Failed to create booking. Please try again.")
+      const error = err as { message?: string }
+      setError(error.message || "Failed to create booking. Please try again.")
     } finally {
       setIsSubmittingBooking(false)
     }
+  }
+
+  // Check if course has pending booking by this tourist
+  const hasPendingBooking = (courseId: string) => {
+    return myBookings.some(
+      (booking) => booking.courseId === courseId && booking.status === "PENDING"
+    )
+  }
+
+  // Check if course is available for booking (no pending booking)
+  const isCourseAvailable = (courseId: string) => {
+    const booking = myBookings.find((b) => b.courseId === courseId)
+    if (!booking) return true
+    
+    // Reopen if rejected or confirmed
+    return booking.status === "DECLINED" || booking.status === "CONFIRMED"
   }
 
   const filteredCourses = courses.filter(course => {
@@ -154,7 +180,8 @@ export default function TouristDashboard() {
                          course.description.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = selectedCategory === "All" || course.category?.name === selectedCategory
     const matchesLevel = selectedLevel === "All" || course.level === selectedLevel
-    return matchesSearch && matchesCategory && matchesLevel
+    const isAvailable = isCourseAvailable(course.id)
+    return matchesSearch && matchesCategory && matchesLevel && isAvailable
   })
 
   // Get unique categories from courses
@@ -360,12 +387,21 @@ export default function TouristDashboard() {
                     )}
                   </div>
                   
-                  <button
-                    onClick={() => handleBookCourse(course)}
-                    className="w-full bg-black text-white py-3 rounded-xl font-semibold hover:bg-gray-800 transition-colors"
-                  >
-                    Book Course
-                  </button>
+                  {hasPendingBooking(course.id) ? (
+                    <button
+                      disabled
+                      className="w-full bg-gray-300 text-gray-600 py-3 rounded-xl font-semibold cursor-not-allowed"
+                    >
+                      Booking Pending
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleBookCourse(course)}
+                      className="w-full bg-black text-white py-3 rounded-xl font-semibold hover:bg-gray-800 transition-colors"
+                    >
+                      Book Course
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -415,71 +451,45 @@ export default function TouristDashboard() {
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-4">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Available Date & Time Options *
-                  </label>
-                  <button
-                    type="button"
-                    onClick={addBookingOption}
-                    className="text-sm text-black hover:underline font-medium"
-                  >
-                    + Add Option
-                  </button>
-                </div>
+                <label className="block text-sm font-medium text-gray-700 mb-4">
+                  Preferred Date & Time *
+                </label>
                 
-                <div className="space-y-4">
-                  {bookingOptions.map((option, index) => (
-                    <div key={index} className="border border-gray-200 rounded-xl p-4 space-y-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-700">Option {index + 1}</span>
-                        {bookingOptions.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeBookingOption(index)}
-                            className="text-red-600 hover:text-red-800 text-sm"
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div>
-                          <label className="block text-xs text-gray-600 mb-1">Date</label>
-                          <input
-                            type="date"
-                            value={option.date}
-                            onChange={(e) => updateBookingOption(index, "date", e.target.value)}
-                            required
-                            className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-600 mb-1">Start Time</label>
-                          <input
-                            type="time"
-                            value={option.startTime}
-                            onChange={(e) => updateBookingOption(index, "startTime", e.target.value)}
-                            required
-                            className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-600 mb-1">End Time</label>
-                          <input
-                            type="time"
-                            value={option.endTime}
-                            onChange={(e) => updateBookingOption(index, "endTime", e.target.value)}
-                            required
-                            className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-2">Date</label>
+                    <input
+                      type="date"
+                      value={bookingDate}
+                      onChange={(e) => setBookingDate(e.target.value)}
+                      required
+                      min={new Date().toISOString().split('T')[0]}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-2">Start Time</label>
+                    <input
+                      type="time"
+                      value={bookingStartTime}
+                      onChange={(e) => setBookingStartTime(e.target.value)}
+                      required
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-2">End Time</label>
+                    <input
+                      type="time"
+                      value={bookingEndTime}
+                      onChange={(e) => setBookingEndTime(e.target.value)}
+                      required
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black"
+                    />
+                  </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  Add multiple date/time options. The tutor will select one that works best.
+                <p className="text-xs text-gray-500 mt-3">
+                  Select your preferred date and time range for the course.
                 </p>
               </div>
 

@@ -14,26 +14,42 @@ export const createBookingController = async (req: Request, res: Response) => {
 
     const data = createBookingSchema.parse(req.body);
 
-    // Transform options to match Prisma schema (store time range as string)
-    const bookingOptions = data.options.map((option) => ({
-      date: new Date(option.date),
-      time: `${option.startTime} - ${option.endTime}`,
-    }));
+    // Check if tourist already has a pending booking for this course
+    const existingBooking = await prisma.booking.findFirst({
+      where: {
+        courseId: data.courseId,
+        touristId: req.user.id,
+        status: "PENDING",
+      },
+    });
+
+    if (existingBooking) {
+      return res.status(400).json({
+        error: "You already have a pending booking for this course. Please wait for the tutor's response.",
+      });
+    }
+
+    // Transform single timestamp to match Prisma schema (store time range as string)
+    const bookingOption = {
+      date: new Date(data.date),
+      time: `${data.startTime} - ${data.endTime}`,
+    };
 
     const booking = await prisma.booking.create({
       data: {
         courseId: data.courseId,
         touristId: req.user.id,
         message: data.message,
-        options: { create: bookingOptions },
+        options: { create: [bookingOption] },
       },
-      include: { options: true, tutorResponse: true, course: true },
+      include: { options: true, tutorResponse: true, course: true, tourist: true },
     });
 
     res.status(201).json({ message: "Booking created", booking });
-  } catch (error: any) {
-    if (error.name === "ZodError")
-      return res.status(400).json({ error: error.errors });
+  } catch (error: unknown) {
+    const err = error as { name?: string; errors?: unknown };
+    if (err.name === "ZodError")
+      return res.status(400).json({ error: err.errors });
     console.error(error);
     res.status(500).json({ error: "Failed to create booking" });
   }
@@ -171,9 +187,10 @@ export const tutorRespondBookingController = async (
       booking: updatedBooking,
       tutorResponse,
     });
-  } catch (error: any) {
-    if (error.name === "ZodError")
-      return res.status(400).json({ error: error.errors });
+  } catch (error: unknown) {
+    const err = error as { name?: string; errors?: unknown };
+    if (err.name === "ZodError")
+      return res.status(400).json({ error: err.errors });
     console.error(error);
     return res.status(500).json({ error: "Failed to respond to booking" });
   }
@@ -269,9 +286,10 @@ export const rescheduleBookingController = async (
     res
       .status(200)
       .json({ message: "Booking rescheduled", booking: updatedBooking });
-  } catch (error: any) {
-    if (error.name === "ZodError")
-      return res.status(400).json({ error: error.errors });
+  } catch (error: unknown) {
+    const err = error as { name?: string; errors?: unknown };
+    if (err.name === "ZodError")
+      return res.status(400).json({ error: err.errors });
     console.error(error);
     res.status(500).json({ error: "Failed to reschedule booking" });
   }
