@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Search, MapPin, Clock, LogOut, BookOpen, AlertCircle, X } from "lucide-react"
+import { Search, MapPin, Clock, LogOut, BookOpen, AlertCircle, X, Calendar } from "lucide-react"
 import Image from "next/image"
-import { getToken, getUser, logout } from "@/lib/auth"
-import { courseApi } from "@/lib/api"
+import { getToken, getUser, logout, isTourist, isAuthenticated } from "@/lib/auth"
+import { courseApi, bookingApi } from "@/lib/api"
 
 interface Course {
   id: string
@@ -30,6 +30,11 @@ export default function TouristDashboard() {
   const [selectedCategory, setSelectedCategory] = useState("All")
   const [selectedLevel, setSelectedLevel] = useState("All")
   const [isMounted, setIsMounted] = useState(false)
+  const [showBookingModal, setShowBookingModal] = useState(false)
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null)
+  const [bookingOptions, setBookingOptions] = useState([{ date: "", startTime: "", endTime: "" }])
+  const [bookingMessage, setBookingMessage] = useState("")
+  const [isSubmittingBooking, setIsSubmittingBooking] = useState(false)
   const router = useRouter()
   
   useEffect(() => {
@@ -39,16 +44,28 @@ export default function TouristDashboard() {
   useEffect(() => {
     if (!isMounted) return
     
-    const token = getToken()
     const user = getUser()
     
-    if (!token || !user) {
+    // Check if user is authenticated
+    if (!isAuthenticated()) {
+      router.replace("/auth/login")
+      return
+    }
+
+    // Check if user is a tourist
+    if (!isTourist()) {
+      // If user is a tutor, redirect to tutor dashboard
+      if (user?.role === "TUTOR") {
+        router.replace("/dashboard/tutor")
+        return
+      }
+      // Otherwise redirect to login
       router.replace("/auth/login")
       return
     }
 
     fetchCourses()
-  }, [isMounted])
+  }, [isMounted, router])
 
   const fetchCourses = async () => {
     try {
@@ -68,6 +85,68 @@ export default function TouristDashboard() {
   const handleLogout = () => {
     logout()
     router.push("/")
+  }
+
+  const handleBookCourse = (course: Course) => {
+    setSelectedCourse(course)
+    setShowBookingModal(true)
+    setBookingOptions([{ date: "", startTime: "", endTime: "" }])
+    setBookingMessage("")
+  }
+
+  const addBookingOption = () => {
+    setBookingOptions([...bookingOptions, { date: "", startTime: "", endTime: "" }])
+  }
+
+  const removeBookingOption = (index: number) => {
+    setBookingOptions(bookingOptions.filter((_, i) => i !== index))
+  }
+
+  const updateBookingOption = (index: number, field: string, value: string) => {
+    const updated = [...bookingOptions]
+    updated[index] = { ...updated[index], [field]: value }
+    setBookingOptions(updated)
+  }
+
+  const handleSubmitBooking = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedCourse) return
+
+    // Validate at least one option with all fields
+    const validOptions = bookingOptions.filter(
+      opt => opt.date && opt.startTime && opt.endTime
+    )
+
+    if (validOptions.length === 0) {
+      setError("Please add at least one date and time option")
+      return
+    }
+
+    setIsSubmittingBooking(true)
+    setError("")
+
+    try {
+      await bookingApi.create({
+        courseId: selectedCourse.id,
+        message: bookingMessage || undefined,
+        options: validOptions.map(opt => ({
+          date: opt.date,
+          startTime: opt.startTime,
+          endTime: opt.endTime,
+        })),
+      })
+
+      setShowBookingModal(false)
+      setSelectedCourse(null)
+      setBookingOptions([{ date: "", startTime: "", endTime: "" }])
+      setBookingMessage("")
+      alert("Booking request sent successfully! The tutor will review and respond.")
+    } catch (err: any) {
+      console.error("Error creating booking:", err)
+      setError(err.message || "Failed to create booking. Please try again.")
+    } finally {
+      setIsSubmittingBooking(false)
+    }
   }
 
   const filteredCourses = courses.filter(course => {
@@ -281,8 +360,11 @@ export default function TouristDashboard() {
                     )}
                   </div>
                   
-                  <button className="w-full bg-black text-white py-3 rounded-xl font-semibold hover:bg-gray-800 transition-colors">
-                    View Details
+                  <button
+                    onClick={() => handleBookCourse(course)}
+                    className="w-full bg-black text-white py-3 rounded-xl font-semibold hover:bg-gray-800 transition-colors"
+                  >
+                    Book Course
                   </button>
                 </div>
               </div>
@@ -290,6 +372,141 @@ export default function TouristDashboard() {
           </div>
         )}
       </div>
+
+      {/* Booking Modal */}
+      {showBookingModal && selectedCourse && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-2xl font-bold">Book Course: {selectedCourse.title}</h3>
+                <button
+                  onClick={() => {
+                    setShowBookingModal(false)
+                    setSelectedCourse(null)
+                    setError("")
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmitBooking} className="p-6 space-y-6">
+              {error && (
+                <div className="p-4 rounded-lg bg-red-50 border border-red-200 flex items-start">
+                  <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 mr-3 shrink-0" />
+                  <p className="text-red-800 font-medium">{error}</p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Message (Optional)
+                </label>
+                <textarea
+                  value={bookingMessage}
+                  onChange={(e) => setBookingMessage(e.target.value)}
+                  placeholder="Add any special requests or notes..."
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black"
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Available Date & Time Options *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addBookingOption}
+                    className="text-sm text-black hover:underline font-medium"
+                  >
+                    + Add Option
+                  </button>
+                </div>
+                
+                <div className="space-y-4">
+                  {bookingOptions.map((option, index) => (
+                    <div key={index} className="border border-gray-200 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-700">Option {index + 1}</span>
+                        {bookingOptions.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeBookingOption(index)}
+                            className="text-red-600 hover:text-red-800 text-sm"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">Date</label>
+                          <input
+                            type="date"
+                            value={option.date}
+                            onChange={(e) => updateBookingOption(index, "date", e.target.value)}
+                            required
+                            className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">Start Time</label>
+                          <input
+                            type="time"
+                            value={option.startTime}
+                            onChange={(e) => updateBookingOption(index, "startTime", e.target.value)}
+                            required
+                            className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">End Time</label>
+                          <input
+                            type="time"
+                            value={option.endTime}
+                            onChange={(e) => updateBookingOption(index, "endTime", e.target.value)}
+                            required
+                            className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Add multiple date/time options. The tutor will select one that works best.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBookingModal(false)
+                    setSelectedCourse(null)
+                    setError("")
+                  }}
+                  className="flex-1 px-6 py-3 border border-gray-300 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingBooking}
+                  className="flex-1 px-6 py-3 bg-black text-white rounded-xl font-semibold hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmittingBooking ? "Submitting..." : "Submit Booking Request"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

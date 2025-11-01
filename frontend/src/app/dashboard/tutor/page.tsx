@@ -19,7 +19,7 @@ import {
   Calendar,
   Mail,
 } from "lucide-react";
-import { getToken, getUser, logout, isTutor } from "@/lib/auth";
+import { getUser, logout, isTutor, isAuthenticated } from "@/lib/auth";
 import { courseApi, bookingApi, categoryApi } from "@/lib/api";
 import { uploadImage } from "@/lib/cloudinary";
 
@@ -112,16 +112,23 @@ export default function TutorDashboard() {
   useEffect(() => {
     if (!isMounted) return;
 
-    const token = getToken();
     const user = getUser();
 
-    if (!token || !user) {
+    // Check if user is authenticated
+    if (!isAuthenticated()) {
       router.replace("/auth/login");
       return;
     }
 
+    // Check if user is a tutor
     if (!isTutor()) {
-      router.replace("/dashboard/tourist");
+      // If user is a tourist, redirect to tourist dashboard
+      if (user?.role === "TOURIST") {
+        router.replace("/dashboard/tourist");
+        return;
+      }
+      // Otherwise redirect to login
+      router.replace("/auth/login");
       return;
     }
 
