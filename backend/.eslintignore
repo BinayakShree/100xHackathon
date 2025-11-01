@@ -1,9 +1,11 @@
-# Ignore everything
-*
-**/*
+NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME="dxfs5dp66"
+NEXT_PUBLIC_CLOUDINARY_API_KEY="338339691846228"
+NEXT_PUBLIC_CLOUDINARY_API_SECRET="7prxxs0bpVWrSSf0Q2LHlVbMD3U"
 
-# Specific directories
-node_modules/
-dist/
-build/
-coverage/
+# Create an unsigned upload preset in Cloudinary dashboard
+NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET="Hackathon"
+NEXT_PUBLIC_API_URL="frontend"
+
+# Disable TypeScript and ESLint checks
+NEXT_DISABLE_TYPESCRIPT=1
+NEXT_DISABLE_ESLINT=1
