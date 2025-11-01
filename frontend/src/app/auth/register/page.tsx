@@ -1,5 +1,5 @@
 import Image from "next/image"
-import {LoginForm }from "@/components/forms/login-form"
+import { RegisterForm } from "@/components/forms/register-form"
 
 export default function RegisterPage() {
   return (
@@ -26,8 +26,7 @@ export default function RegisterPage() {
             </div>
           </div>
 
-         <LoginForm/>
-
+          <RegisterForm />
         </div>
       </div>
 

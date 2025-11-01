@@ -2,7 +2,7 @@ import Image from 'next/image'
 
 export default function AboutSection() {
     return (
-      <main className="min-h-screen bg-white">
+      <section className="min-h-screen bg-white" id='about'>
         <div className="max-w-7xl mx-auto px-6 lg:px-8 py-20 lg:py-32">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             {/* Left Column - Text */}
@@ -12,7 +12,7 @@ export default function AboutSection() {
               </h1>
               <p className="text-lg text-[#7f7f7f] leading-relaxed">
                 we connect travelers with local tutors who share their art, food, dance, and traditions — helping you
-                experience Nepal through its people, not its landmarks.
+                learn about Nepal through its people, not just its landmarks.
               </p>
             </div>
   
@@ -22,7 +22,7 @@ export default function AboutSection() {
             </div>
           </div>
         </div>
-      </main>
+      </section>
     )
   }
   

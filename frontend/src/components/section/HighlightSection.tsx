@@ -4,7 +4,7 @@ import Button from "@/components/ui/button"
 export default function Home() {
   return (
     <main className="min-h-screen">
-      <section className="">
+      <section className="" id="highlight">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 lg:grid-rows-6 gap-6 lg:gap-4 min-h-[800px]">
           {/* div1: Heading & Description */}
           <div className="col-span-1 md:col-span-2 lg:col-span-2 lg:row-span-2 flex flex-col justify-center pr-0 lg:pr-6 order-1 md:order-1">
@@ -12,7 +12,7 @@ export default function Home() {
               Our Cultural Highlights
             </h1>
             <p className="font-poppins text-sm sm:text-base xl:text-lg text-gray-600 ">
-              Discover some of our most loved local experiences — moments where travelers and tutors connect to
+              Discover some of our most loved local courses — where learners and tutors connect to
               celebrate Nepal's culture.
             </p>
           </div>
@@ -86,7 +86,7 @@ export default function Home() {
             <Button
               className="font-poppins rounded-full px-12 py-6 text-lg font-medium border-2 w-full cursor-pointer border-black hover:bg-black hover:text-white transition-colors bg-transparent"
             >
-              View All Experiences
+              View All Courses
             </Button>
           </div>
         </div>
