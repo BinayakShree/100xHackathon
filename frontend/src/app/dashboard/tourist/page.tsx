@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Search, MapPin, Clock, LogOut, BookOpen, AlertCircle, X, Calendar } from "lucide-react"
+import { NotificationDropdown } from "@/components/ui/notification-dropdown"
 import Image from "next/image"
 import { getToken, getUser, logout, isTourist, isAuthenticated } from "@/lib/auth"
 import { courseApi, bookingApi } from "@/lib/api"
@@ -215,6 +216,7 @@ export default function TouristDashboard() {
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-gray-700">Welcome, {user.name}!</span>
+              <NotificationDropdown />
               <button
                 onClick={handleLogout}
                 className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-black text-white hover:bg-gray-800 transition-colors"

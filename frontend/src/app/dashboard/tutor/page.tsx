@@ -22,10 +22,8 @@ import {
 import { getUser, logout, isTutor, isAuthenticated } from "@/lib/auth";
 import { courseApi, bookingApi, categoryApi } from "@/lib/api";
 import { uploadImage } from "@/lib/cloudinary";
-import {
-  NotificationSheet,
-  useNotifications,
-} from "@/components/notifications";
+import { NotificationDropdown } from "@/components/ui/notification-dropdown";
+import { useNotificationStore } from "@/store/notificationStore";
 
 interface Course {
   id: string;
@@ -76,15 +74,8 @@ export default function TutorDashboard() {
   );
   const router = useRouter();
 
-  // Notifications
-  const {
-    notifications,
-    isOpen: isNotificationOpen,
-    addNotification,
-    removeNotification,
-    clearAll: clearAllNotifications,
-    toggleSheet: toggleNotificationSheet,
-  } = useNotifications();
+  // Notifications from Zustand store
+  const addNotification = useNotificationStore(state => state.addNotification);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -193,13 +184,13 @@ export default function TutorDashboard() {
           (b) => b.status === "PENDING"
         ).length;
         if (pendingCount > oldPendingCount) {
-          addNotification(
-            "info",
-            "New booking request",
-            `You have ${pendingCount} pending booking${
+          addNotification({
+            type: "info",
+            title: "New booking request",
+            message: `You have ${pendingCount} pending booking${
               pendingCount > 1 ? "s" : ""
             }`
-          );
+          });
         }
       }
 
@@ -291,13 +282,13 @@ export default function TutorDashboard() {
       fetchMyCourses();
 
       // Show notification
-      addNotification(
-        "success",
-        isEditing ? "Course updated" : "Course created",
-        `Your course "${formData.title}" has been ${
+      addNotification({
+        type: "success",
+        title: isEditing ? "Course updated" : "Course created",
+        message: `Your course "${formData.title}" has been ${
           isEditing ? "updated" : "created"
         } successfully`
-      );
+      });
     } catch (err: unknown) {
       console.error("Error saving course:", err);
       const error = err as { message?: string };
@@ -369,11 +360,11 @@ export default function TutorDashboard() {
       }
 
       // Show notification
-      addNotification(
-        "success",
-        "Course deleted",
-        `Course "${course.title}" has been deleted successfully`
-      );
+      addNotification({
+        type: "success",
+        title: "Course deleted",
+        message: `Course "${course.title}" has been deleted successfully`
+      });
     } catch (err: unknown) {
       console.error("Error deleting course:", err);
       alert("Failed to delete course. Please try again.");
@@ -406,21 +397,21 @@ export default function TutorDashboard() {
 
       // Show notification
       const booking = bookings.find((b) => b.id === bookingId);
-      addNotification(
-        status === "CONFIRMED" ? "success" : "info",
-        `Booking ${status.toLowerCase()}`,
-        `You ${
+      addNotification({
+        type: status === "CONFIRMED" ? "success" : "info",
+        title: `Booking ${status.toLowerCase()}`,
+        message: `You ${
           status === "CONFIRMED" ? "accepted" : "declined"
         } the booking request from ${booking?.tourist.name || "tourist"}`
-      );
+      });
     } catch (err: unknown) {
       console.error("Error responding to booking:", err);
       const error = err as { message?: string };
-      addNotification(
-        "error",
-        "Failed to respond",
-        error.message || "Failed to respond to booking. Please try again."
-      );
+      addNotification({
+        type: "error",
+        title: "Failed to respond",
+        message: error.message || "Failed to respond to booking. Please try again."
+      });
     } finally {
       setIsRespondingBooking(null);
     }
@@ -460,13 +451,7 @@ export default function TutorDashboard() {
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-gray-700">Welcome, {user.name}!</span>
-              <NotificationSheet
-                notifications={notifications}
-                onClose={removeNotification}
-                onCloseAll={clearAllNotifications}
-                isOpen={isNotificationOpen}
-                onToggle={toggleNotificationSheet}
-              />
+              <NotificationDropdown />
               <button
                 onClick={handleLogout}
                 className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-black text-white hover:bg-gray-800 transition-colors"
@@ -1073,3 +1058,4 @@ export default function TutorDashboard() {
     </div>
   );
 }
+
