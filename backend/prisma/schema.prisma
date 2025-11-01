@@ -18,6 +18,7 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   notifications Notification[] 
+    reviews   Review[]
   // Relations
   courses   Course[] @relation("TutorCourses") // courses tutor owns
   bookings  Booking[] @relation("TouristBookings") // bookings tourist made
@@ -50,6 +51,8 @@ model Course {
   categoryId   String
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+    reviews   Review[]   // all reviews for this course
+
 
   // Relations
   tutor       User          @relation("TutorCourses", fields: [tutorId], references: [id])
@@ -78,6 +81,7 @@ model Booking {
   updatedAt   DateTime        @updatedAt
   notifications  Notification[] 
   // Relations
+    reviews        Review[]  
   course         Course          @relation("CourseBookings", fields: [courseId], references: [id])
   tourist        User            @relation("TouristBookings", fields: [touristId], references: [id])
   options        BookingOption[] // multiple date/time options proposed by tourist
@@ -118,6 +122,24 @@ model Notification {
   user        User          @relation(fields: [userId], references: [id])
   booking     Booking?      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 }
+model Review {
+  id          String   @id @default(cuid())
+  touristId   String
+  courseId    String
+  bookingId   String?       // optional but helps verify that the user took the course
+  rating      Int           // 1–5 stars
+  comment     String?       // optional text review
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tourist     User     @relation(fields: [touristId], references: [id])
+  course      Course   @relation(fields: [courseId], references: [id])
+  booking     Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@unique([touristId, courseId], name: "unique_review_per_course")
+}
+
 enum BookingStatus {
   PENDING
   CONFIRMED
