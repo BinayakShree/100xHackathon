@@ -1,11 +1,16 @@
-import React from 'react'
+import React from "react"
 
-const button = ({children, className}:{children:React.ReactNode,className:string}) => {
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  className?: string
+  children: React.ReactNode
+}
+
+const Button: React.FC<ButtonProps> = ({ children, className = "", ...rest }) => {
   return (
-    <button className={className}>
-        {children}
+    <button className={className} {...rest}>
+      {children}
     </button>
   )
 }
 
-export default button
+export default Button
