@@ -17,7 +17,7 @@ model User {
   role      Role     @default(TOURIST)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
+  notifications Notification[] 
   // Relations
   courses   Course[] @relation("TutorCourses") // courses tutor owns
   bookings  Booking[] @relation("TouristBookings") // bookings tourist made
@@ -76,7 +76,7 @@ model Booking {
   message     String?         // optional note/comment from tourist
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
-
+  notifications  Notification[] 
   // Relations
   course         Course          @relation("CourseBookings", fields: [courseId], references: [id])
   tourist        User            @relation("TouristBookings", fields: [touristId], references: [id])
@@ -106,7 +106,18 @@ model TutorResponse {
   booking            Booking        @relation(fields: [bookingId], references: [id])
   selectedOption     BookingOption? @relation("TutorSelectedOption", fields: [selectedOptionId], references: [id])
 }
+model Notification {
+  id          String        @id @default(cuid())
+  userId      String
+  bookingId   String?
+  title       String
+  message     String
+  isRead      Boolean       @default(false)
+  createdAt   DateTime      @default(now())
 
+  user        User          @relation(fields: [userId], references: [id])
+  booking     Booking?      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
 enum BookingStatus {
   PENDING
   CONFIRMED
