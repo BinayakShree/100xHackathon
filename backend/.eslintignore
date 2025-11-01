@@ -1,0 +1,9 @@
+# Ignore everything
+*
+**/*
+
+# Specific directories
+node_modules/
+dist/
+build/
+coverage/
