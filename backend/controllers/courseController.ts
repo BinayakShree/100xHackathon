@@ -10,11 +10,25 @@ export const createCourseController = async (req: Request, res: Response) => {
       return res.status(403).json({ error: "Access denied: Tutors only" });
     }
 
+    // Validate that category exists
+    const category = await prisma.category.findUnique({
+      where: { id: data.categoryId },
+    });
+
+    if (!category) {
+      return res.status(400).json({
+        error: "Category not found. Please provide a valid categoryId.",
+      });
+    }
+
+    // Destructure photos from data to avoid conflict with nested create
+    const { photos, ...courseData } = data;
+
     const course = await prisma.course.create({
       data: {
-        ...data,
+        ...courseData,
         tutorId: req.user.id,
-        photos: { create: data.photos?.map((url) => ({ url })) || [] },
+        photos: { create: photos?.map((url) => ({ url })) || [] },
       },
       include: { photos: true, category: true },
     });
@@ -23,6 +37,11 @@ export const createCourseController = async (req: Request, res: Response) => {
   } catch (error: any) {
     if (error.name === "ZodError")
       return res.status(400).json({ error: error.errors });
+    if (error.code === "P2003") {
+      return res.status(400).json({
+        error: "Invalid categoryId. The category does not exist.",
+      });
+    }
     console.error(error);
     res.status(500).json({ error: "Internal server error" });
   }
@@ -70,12 +89,42 @@ export const getCourseByIdController = async (req: Request, res: Response) => {
 
     const course = await prisma.course.findUnique({
       where: { id },
-      include: { photos: true, category: true, tutor: true },
+      include: {
+        photos: true,
+        category: true,
+        tutor: true,
+        bookings: {
+          include: {
+            options: true,
+            tutorResponse: true,
+            tourist: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        },
+      },
     });
 
     if (!course) return res.status(404).json({ error: "Course not found" });
 
-    res.status(200).json(course);
+    // If user is tutor and owns this course, include all bookings
+    // Otherwise, only show booking status (for privacy)
+    const response: any = { ...course };
+
+    if (req.user && req.user.role === "TUTOR" && course.tutorId === req.user.id) {
+      // Tutor viewing their own course - show all booking details
+      response.bookings = course.bookings;
+    } else {
+      // Hide booking details for non-tutor owners
+      response.bookings = undefined;
+    }
+
+    res.status(200).json(response);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Failed to fetch course" });
@@ -100,15 +149,30 @@ export const updateCourseController = async (req: Request, res: Response) => {
         .json({ error: "You can only edit your own courses" });
     }
 
+    // Validate category if being updated
+    if (data.categoryId) {
+      const category = await prisma.category.findUnique({
+        where: { id: data.categoryId },
+      });
+      if (!category) {
+        return res.status(400).json({
+          error: "Category not found. Please provide a valid categoryId.",
+        });
+      }
+    }
+
+    // Destructure photos from data to avoid conflict with nested update
+    const { photos, ...courseData } = data;
+
     // Update main fields
     const updatedCourse = await prisma.course.update({
       where: { id },
       data: {
-        ...data,
-        photos: data.photos
+        ...courseData,
+        photos: photos
           ? {
               deleteMany: {}, // remove old photos
-              create: data.photos.map((url) => ({ url })), // add new ones
+              create: photos.map((url) => ({ url })), // add new ones
             }
           : undefined,
       },

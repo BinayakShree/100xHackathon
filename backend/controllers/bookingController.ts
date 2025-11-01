@@ -14,12 +14,18 @@ export const createBookingController = async (req: Request, res: Response) => {
 
     const data = createBookingSchema.parse(req.body);
 
+    // Transform options to match Prisma schema (store time range as string)
+    const bookingOptions = data.options.map((option) => ({
+      date: new Date(option.date),
+      time: `${option.startTime} - ${option.endTime}`,
+    }));
+
     const booking = await prisma.booking.create({
       data: {
         courseId: data.courseId,
         touristId: req.user.id,
         message: data.message,
-        options: { create: data.options },
+        options: { create: bookingOptions },
       },
       include: { options: true, tutorResponse: true, course: true },
     });
@@ -102,7 +108,7 @@ export const tutorRespondBookingController = async (
       where: { id },
       include: {
         options: true,
-        course: true, // <-- added
+        course: true,
       },
     });
 
@@ -113,6 +119,19 @@ export const tutorRespondBookingController = async (
         .status(403)
         .json({ error: "You can only respond to your own course bookings" });
 
+    // Validate selectedOptionId if CONFIRMED
+    if (data.status === "CONFIRMED" && data.selectedOptionId) {
+      const optionExists = booking.options.some(
+        (opt) => opt.id === data.selectedOptionId
+      );
+      if (!optionExists) {
+        return res.status(400).json({
+          error: "Selected option must be one of the booking options",
+        });
+      }
+    }
+
+    // Create or update tutor response
     const tutorResponse = await prisma.tutorResponse.upsert({
       where: { bookingId: id },
       update: { ...data },
@@ -120,12 +139,92 @@ export const tutorRespondBookingController = async (
       include: { selectedOption: true },
     });
 
-    res.status(200).json({ message: "Booking response saved", tutorResponse });
+    // Update booking status based on tutor response
+    const bookingStatus =
+      data.status === "CONFIRMED"
+        ? "CONFIRMED"
+        : data.status === "DECLINED"
+        ? "DECLINED"
+        : "RESCHEDULED";
+
+    const updatedBooking = await prisma.booking.update({
+      where: { id },
+      data: { status: bookingStatus },
+      include: {
+        options: true,
+        tutorResponse: {
+          include: { selectedOption: true },
+        },
+        course: true,
+        tourist: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    res.status(200).json({
+      message: "Booking response saved",
+      booking: updatedBooking,
+      tutorResponse,
+    });
   } catch (error: any) {
     if (error.name === "ZodError")
       return res.status(400).json({ error: error.errors });
     console.error(error);
     return res.status(500).json({ error: "Failed to respond to booking" });
+  }
+};
+
+// ---------------- Get bookings by courseId (for tutor course detail page) ----------------
+export const getBookingsByCourseIdController = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    if (!req.user || req.user.role !== "TUTOR")
+      return res.status(403).json({ error: "Only tutors can view course bookings" });
+
+    const { courseId } = req.params;
+
+    // Verify the course belongs to this tutor
+    const course = await prisma.course.findUnique({
+      where: { id: courseId },
+    });
+
+    if (!course) return res.status(404).json({ error: "Course not found" });
+
+    if (course.tutorId !== req.user.id)
+      return res.status(403).json({
+        error: "You can only view bookings for your own courses",
+      });
+
+    const bookings = await prisma.booking.findMany({
+      where: { courseId },
+      include: {
+        options: true,
+        tutorResponse: {
+          include: { selectedOption: true },
+        },
+        tourist: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    res.status(200).json({ count: bookings.length, bookings });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to fetch course bookings" });
   }
 };
 
@@ -148,6 +247,12 @@ export const rescheduleBookingController = async (
         .status(403)
         .json({ error: "You can only reschedule your own bookings" });
 
+    // Transform options to match Prisma schema (store time range as string)
+    const bookingOptions = data.options.map((option) => ({
+      date: new Date(option.date),
+      time: `${option.startTime} - ${option.endTime}`,
+    }));
+
     // Delete old options and add new ones
     await prisma.bookingOption.deleteMany({ where: { bookingId: id } });
     const updatedBooking = await prisma.booking.update({
@@ -155,7 +260,7 @@ export const rescheduleBookingController = async (
       data: {
         message: data.message,
         status: "PENDING",
-        options: { create: data.options },
+        options: { create: bookingOptions },
         tutorResponse: { delete: true }, // remove previous tutor response
       },
       include: { options: true, tutorResponse: true, course: true },

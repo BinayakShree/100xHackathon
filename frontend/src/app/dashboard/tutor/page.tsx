@@ -1,165 +1,224 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { Plus, BookOpen, Clock, LogOut, Save, Upload, XCircle, AlertCircle, Edit2, Trash2, CheckCircle, X, Users, Calendar, Mail } from "lucide-react"
-import { getToken, getUser, logout, isTutor } from "@/lib/auth"
-import { courseApi, bookingApi } from "@/lib/api"
-import { uploadImage } from "@/lib/cloudinary"
-import { COMMON_CATEGORIES, getCategoryIdByName, getCategoryNameById } from "@/lib/categories"
+import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Plus,
+  BookOpen,
+  Clock,
+  LogOut,
+  Save,
+  Upload,
+  XCircle,
+  AlertCircle,
+  Edit2,
+  Trash2,
+  CheckCircle,
+  X,
+  Users,
+  Calendar,
+  Mail,
+} from "lucide-react";
+import { getToken, getUser, logout, isTutor } from "@/lib/auth";
+import { courseApi, bookingApi, categoryApi } from "@/lib/api";
+import { uploadImage } from "@/lib/cloudinary";
 
 interface Course {
-  id: string
-  title: string
-  description: string
-  category?: { id: string; name: string }
-  price: number
-  duration: string
-  level: string
-  location?: string
-  prerequisite?: string
-  photos?: Array<{ url: string }>
-  createdAt: string
+  id: string;
+  title: string;
+  description: string;
+  category?: { id: string; name: string };
+  price: number;
+  duration: string;
+  level: string;
+  location?: string;
+  prerequisite?: string;
+  photos?: Array<{ url: string }>;
+  createdAt: string;
 }
 
 interface Booking {
-  id: string
-  status: string
-  message?: string
-  createdAt: string
-  tourist: { name: string; email: string }
-  options: Array<{ id: string; date: string; time: string }>
-  course?: { title: string }
+  id: string;
+  status: string;
+  message?: string;
+  createdAt: string;
+  tourist: { name: string; email: string };
+  options: Array<{ id: string; date: string; time: string }>;
+  course?: { title: string };
+}
+
+interface Category {
+  id: string;
+  name: string;
 }
 
 export default function TutorDashboard() {
-  const [courses, setCourses] = useState<Course[]>([])
-  const [bookings, setBookings] = useState<Booking[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
-  const [showForm, setShowForm] = useState(false)
-  const [showDetails, setShowDetails] = useState(false)
-  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null)
-  const [isEditing, setIsEditing] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isMounted, setIsMounted] = useState(false)
-  const [uploadingImage, setUploadingImage] = useState(false)
-  const [loadingBookings, setLoadingBookings] = useState(false)
-  const router = useRouter()
-  
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [loadingBookings, setLoadingBookings] = useState(false);
+  const router = useRouter();
+
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    category: "Arts & Crafts",
+    categoryId: "",
     price: "",
     duration: "",
     level: "BEGINNER",
     location: "",
     prerequisite: "",
-    photos: [] as string[]
-  })
+    photos: [] as string[],
+  });
 
-  const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([])
-
-  useEffect(() => {
-    setIsMounted(true)
-  }, [])
+  const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
 
   useEffect(() => {
-    if (!isMounted) return
-    
-    const token = getToken()
-    const user = getUser()
-    
+    setIsMounted(true);
+  }, []);
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      setLoadingCategories(true);
+      const response = await categoryApi.getAll();
+      if (response.categories && response.categories.length > 0) {
+        setCategories(response.categories);
+        // Set default category to first one if formData doesn't have one
+        setFormData((prev) => {
+          if (!prev.categoryId && response.categories[0]) {
+            return { ...prev, categoryId: response.categories[0].id };
+          }
+          return prev;
+        });
+      }
+    } catch (err: any) {
+      console.error("Error fetching categories:", err);
+      setError("Failed to load categories");
+    } finally {
+      setLoadingCategories(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+
+    const token = getToken();
+    const user = getUser();
+
     if (!token || !user) {
-      router.replace("/auth/login")
-      return
+      router.replace("/auth/login");
+      return;
     }
 
     if (!isTutor()) {
-      router.replace("/dashboard/tourist")
-      return
+      router.replace("/dashboard/tourist");
+      return;
     }
-    
-    fetchMyCourses()
-    fetchBookings()
-  }, [isMounted])
+
+    fetchCategories();
+    fetchMyCourses();
+    fetchBookings();
+  }, [isMounted, router, fetchCategories]);
 
   const fetchMyCourses = async () => {
     try {
-      setLoading(true)
-      const user = getUser()
-      
-      const response = await courseApi.getAll({ tutorId: user?.id })
-      
+      setLoading(true);
+      const user = getUser();
+
+      const response = await courseApi.getAll({ tutorId: user?.id });
+
       if (response.courses && response.courses.length > 0) {
-        setCourses(response.courses)
+        setCourses(response.courses);
       } else {
-        setCourses([])
+        setCourses([]);
       }
     } catch (err: any) {
-      console.error("Error fetching courses:", err)
+      console.error("Error fetching courses:", err);
       if (!err.message.includes("404")) {
-        setError("Failed to load courses")
+        setError("Failed to load courses");
       }
-      setCourses([])
+      setCourses([]);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const fetchBookings = async () => {
     try {
-      setLoadingBookings(true)
-      const response = await bookingApi.getTutorBookings()
-      setBookings(response.bookings || [])
+      setLoadingBookings(true);
+      const response = await bookingApi.getTutorBookings();
+      setBookings(response.bookings || []);
     } catch (err: any) {
-      console.error("Error fetching bookings:", err)
-      setBookings([])
+      console.error("Error fetching bookings:", err);
+      setBookings([]);
     } finally {
-      setLoadingBookings(false)
+      setLoadingBookings(false);
     }
-  }
+  };
 
   const handleLogout = () => {
-    logout()
-    router.push("/")
-  }
+    logout();
+    router.push("/");
+  };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
-  }
+  const handleInputChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
+  ) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const file = e.target.files?.[0];
+    if (!file) return;
 
     try {
-      setUploadingImage(true)
-      const result = await uploadImage(file)
-      setUploadedPhotos(prev => [...prev, result.secure_url])
-      setFormData(prev => ({ ...prev, photos: [...prev.photos, result.secure_url] }))
+      setUploadingImage(true);
+      const result = await uploadImage(file);
+      setUploadedPhotos((prev) => [...prev, result.secure_url]);
+      setFormData((prev) => ({
+        ...prev,
+        photos: [...prev.photos, result.secure_url],
+      }));
     } catch (error) {
-      console.error("Error uploading image:", error)
-      alert("Failed to upload image. Please try again.")
+      console.error("Error uploading image:", error);
+      alert("Failed to upload image. Please try again.");
     } finally {
-      setUploadingImage(false)
+      setUploadingImage(false);
     }
-  }
+  };
 
   const removePhoto = (index: number) => {
-    setUploadedPhotos(prev => prev.filter((_, i) => i !== index))
-    setFormData(prev => ({ ...prev, photos: prev.photos.filter((_, i) => i !== index) }))
-  }
+    setUploadedPhotos((prev) => prev.filter((_, i) => i !== index));
+    setFormData((prev) => ({
+      ...prev,
+      photos: prev.photos.filter((_, i) => i !== index),
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-    setIsSubmitting(true)
+    e.preventDefault();
+    setError("");
+    setIsSubmitting(true);
 
     try {
-      const categoryId = getCategoryIdByName(formData.category)
+      if (!formData.categoryId) {
+        setError("Please select a category");
+        setIsSubmitting(false);
+        return;
+      }
 
       const courseData = {
         title: formData.title,
@@ -169,125 +228,140 @@ export default function TutorDashboard() {
         level: formData.level as "BEGINNER" | "INTERMEDIATE" | "ADVANCED",
         location: formData.location || undefined,
         prerequisite: formData.prerequisite || undefined,
-        categoryId: categoryId,
+        categoryId: formData.categoryId,
         photos: uploadedPhotos,
-      }
+      };
 
       if (isEditing && selectedCourse) {
-        await courseApi.update(selectedCourse.id, courseData)
+        await courseApi.update(selectedCourse.id, courseData);
       } else {
-        await courseApi.create(courseData)
+        await courseApi.create(courseData);
       }
-      
-      setShowForm(false)
-      setIsEditing(false)
-      setSelectedCourse(null)
-      resetForm()
-      fetchMyCourses()
+
+      setShowForm(false);
+      setIsEditing(false);
+      setSelectedCourse(null);
+      resetForm();
+      fetchMyCourses();
     } catch (err: any) {
-      console.error("Error saving course:", err)
+      console.error("Error saving course:", err);
       if (err.message.includes("categoryId")) {
-        setError("Category is not set up in the database. Please check report.md for backend setup instructions.")
+        setError(
+          "Category is not set up in the database. Please run the seed script: npm run prisma:seed"
+        );
       } else if (err.message.includes("Unauthorized")) {
-        setError("Failed to save course: Missing authentication. The backend needs authenticateUser middleware in courseRoutes.ts")
+        setError(
+          "Failed to save course: Missing authentication. Please log in again."
+        );
       } else {
-        setError(err.message || "Failed to save course. Please try again.")
+        setError(err.message || "Failed to save course. Please try again.");
       }
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   const resetForm = () => {
     setFormData({
       title: "",
       description: "",
-      category: "Arts & Crafts",
+      categoryId: categories[0]?.id || "",
       price: "",
       duration: "",
       level: "BEGINNER",
       location: "",
       prerequisite: "",
-      photos: []
-    })
-    setUploadedPhotos([])
-  }
+      photos: [],
+    });
+    setUploadedPhotos([]);
+  };
 
   const handleEdit = (course: Course) => {
-    setSelectedCourse(course)
-    setIsEditing(true)
+    setSelectedCourse(course);
+    setIsEditing(true);
     setFormData({
       title: course.title,
       description: course.description,
-      category: course.category?.name || "Arts & Crafts",
+      categoryId: course.category?.id || categories[0]?.id || "",
       price: course.price.toString(),
       duration: course.duration,
       level: course.level,
       location: course.location || "",
       prerequisite: course.prerequisite || "",
-      photos: course.photos?.map(p => p.url) || []
-    })
-    setUploadedPhotos(course.photos?.map(p => p.url) || [])
-    setShowForm(true)
-  }
+      photos: course.photos?.map((p) => p.url) || [],
+    });
+    setUploadedPhotos(course.photos?.map((p) => p.url) || []);
+    setShowForm(true);
+  };
 
   const handleDelete = async (course: Course) => {
-    if (!confirm(`Are you sure you want to delete "${course.title}"? This action cannot be undone.`)) {
-      return
+    if (
+      !confirm(
+        `Are you sure you want to delete "${course.title}"? This action cannot be undone.`
+      )
+    ) {
+      return;
     }
 
     try {
-      await courseApi.delete(course.id)
-      fetchMyCourses()
-      fetchBookings()
+      await courseApi.delete(course.id);
+      fetchMyCourses();
+      fetchBookings();
       if (selectedCourse?.id === course.id) {
-        setShowDetails(false)
-        setSelectedCourse(null)
+        setShowDetails(false);
+        setSelectedCourse(null);
       }
     } catch (err: any) {
-      console.error("Error deleting course:", err)
-      alert("Failed to delete course. Please try again.")
+      console.error("Error deleting course:", err);
+      alert("Failed to delete course. Please try again.");
     }
-  }
+  };
 
   const handleViewDetails = (course: Course) => {
-    setSelectedCourse(course)
-    setShowDetails(true)
-  }
+    setSelectedCourse(course);
+    setShowDetails(true);
+  };
 
-  const handleBookingResponse = async (bookingId: string, status: "CONFIRMED" | "DECLINED", selectedOptionId?: string) => {
+  const handleBookingResponse = async (
+    bookingId: string,
+    status: "CONFIRMED" | "DECLINED",
+    selectedOptionId?: string
+  ) => {
     try {
       await bookingApi.tutorRespond(bookingId, {
         status,
         selectedOptionId,
-        message: status === "CONFIRMED" ? "Looking forward to meeting you!" : ""
-      })
-      fetchBookings()
+        message:
+          status === "CONFIRMED" ? "Looking forward to meeting you!" : "",
+      });
+      fetchBookings();
       if (selectedCourse) {
-        setSelectedCourse({ ...selectedCourse }) // Trigger re-render
+        setSelectedCourse({ ...selectedCourse }); // Trigger re-render
       }
     } catch (err: any) {
-      console.error("Error responding to booking:", err)
-      alert("Failed to respond to booking. Please try again.")
+      console.error("Error responding to booking:", err);
+      alert("Failed to respond to booking. Please try again.");
     }
-  }
+  };
 
-  const courseBookings = selectedCourse 
-    ? bookings.filter(b => b.course?.title === selectedCourse.title)
-    : []
+  const courseBookings = selectedCourse
+    ? bookings.filter((b) => b.course?.title === selectedCourse.title)
+    : [];
 
-  const user = getUser() || { name: "" }
+  const user = getUser() || { name: "" };
 
   if (loading && courses.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-black border-t-transparent mx-auto"></div>
-          <p className="mt-6 text-lg text-gray-600 font-medium">Loading your dashboard...</p>
+          <p className="mt-6 text-lg text-gray-600 font-medium">
+            Loading your dashboard...
+          </p>
           <p className="mt-2 text-sm text-gray-500">Please wait a moment</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -323,7 +397,8 @@ export default function TutorDashboard() {
             Share Your Expertise
           </h2>
           <p className="text-xl text-gray-200 max-w-2xl">
-            Create amazing courses and connect with students passionate about Nepali culture
+            Create amazing courses and connect with students passionate about
+            Nepali culture
           </p>
         </div>
       </div>
@@ -336,7 +411,10 @@ export default function TutorDashboard() {
             <div className="flex-1">
               <p className="text-red-800 font-medium">{error}</p>
             </div>
-            <button onClick={() => setError("")} className="text-red-600 hover:text-red-800">
+            <button
+              onClick={() => setError("")}
+              className="text-red-600 hover:text-red-800"
+            >
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -347,10 +425,10 @@ export default function TutorDashboard() {
           <button
             onClick={() => {
               if (showForm) {
-                resetForm()
-                setIsEditing(false)
+                resetForm();
+                setIsEditing(false);
               }
-              setShowForm(!showForm)
+              setShowForm(!showForm);
             }}
             className="flex items-center space-x-2 px-6 py-3 bg-black text-white rounded-xl font-semibold hover:bg-gray-800 transition-colors"
           >
@@ -362,11 +440,15 @@ export default function TutorDashboard() {
         {/* Create/Edit Course Form */}
         {showForm && (
           <div className="mb-12 bg-white rounded-2xl p-8 shadow-lg">
-            <h3 className="text-2xl font-bold mb-6">{isEditing ? "Edit Course" : "Course Details"}</h3>
+            <h3 className="text-2xl font-bold mb-6">
+              {isEditing ? "Edit Course" : "Course Details"}
+            </h3>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Course Title *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Course Title *
+                  </label>
                   <input
                     type="text"
                     name="title"
@@ -379,22 +461,38 @@ export default function TutorDashboard() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
-                  <select
-                    name="category"
-                    value={formData.category}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black"
-                  >
-                    {COMMON_CATEGORIES.map(cat => (
-                      <option key={cat.id} value={cat.name}>{cat.name}</option>
-                    ))}
-                  </select>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Category *
+                  </label>
+                  {loadingCategories ? (
+                    <div className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-gray-100 animate-pulse">
+                      Loading categories...
+                    </div>
+                  ) : (
+                    <select
+                      name="categoryId"
+                      value={formData.categoryId}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black"
+                    >
+                      {categories.length === 0 ? (
+                        <option value="">No categories available</option>
+                      ) : (
+                        categories.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Price (USD) *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Price (USD) *
+                  </label>
                   <input
                     type="number"
                     name="price"
@@ -409,7 +507,9 @@ export default function TutorDashboard() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Duration *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Duration *
+                  </label>
                   <input
                     type="text"
                     name="duration"
@@ -422,7 +522,9 @@ export default function TutorDashboard() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Level *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Level *
+                  </label>
                   <select
                     name="level"
                     value={formData.level}
@@ -437,7 +539,9 @@ export default function TutorDashboard() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Location
+                  </label>
                   <input
                     type="text"
                     name="location"
@@ -449,7 +553,9 @@ export default function TutorDashboard() {
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Prerequisites</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Prerequisites
+                  </label>
                   <input
                     type="text"
                     name="prerequisite"
@@ -461,11 +567,15 @@ export default function TutorDashboard() {
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Course Photos</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Course Photos
+                  </label>
                   <div className="flex items-center space-x-4">
                     <label className="flex items-center justify-center px-6 py-3 bg-gray-100 rounded-xl cursor-pointer hover:bg-gray-200 transition-colors">
                       <Upload className="h-5 w-5 mr-2" />
-                      <span>{uploadingImage ? "Uploading..." : "Upload Photo"}</span>
+                      <span>
+                        {uploadingImage ? "Uploading..." : "Upload Photo"}
+                      </span>
                       <input
                         type="file"
                         accept="image/*"
@@ -475,13 +585,17 @@ export default function TutorDashboard() {
                       />
                     </label>
                   </div>
-                  
+
                   {uploadedPhotos.length > 0 && (
                     <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
                       {uploadedPhotos.map((url, index) => (
                         <div key={index} className="relative group">
                           <div className="aspect-video w-full rounded-lg overflow-hidden bg-gray-100">
-                            <img src={url} alt={`Upload ${index + 1}`} className="w-full h-full object-cover" />
+                            <img
+                              src={url}
+                              alt={`Upload ${index + 1}`}
+                              className="w-full h-full object-cover"
+                            />
                           </div>
                           <button
                             type="button"
@@ -497,7 +611,9 @@ export default function TutorDashboard() {
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Description *
+                  </label>
                   <textarea
                     name="description"
                     value={formData.description}
@@ -514,9 +630,9 @@ export default function TutorDashboard() {
                 <button
                   type="button"
                   onClick={() => {
-                    setShowForm(false)
-                    setIsEditing(false)
-                    resetForm()
+                    setShowForm(false);
+                    setIsEditing(false);
+                    resetForm();
                   }}
                   className="px-6 py-3 border border-gray-300 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
                 >
@@ -528,7 +644,15 @@ export default function TutorDashboard() {
                   className="flex items-center space-x-2 px-6 py-3 bg-black text-white rounded-xl font-semibold hover:bg-gray-800 transition-colors disabled:opacity-50"
                 >
                   <Save className="h-5 w-5" />
-                  <span>{isSubmitting ? (isEditing ? "Updating..." : "Creating...") : (isEditing ? "Update Course" : "Create Course")}</span>
+                  <span>
+                    {isSubmitting
+                      ? isEditing
+                        ? "Updating..."
+                        : "Creating..."
+                      : isEditing
+                      ? "Update Course"
+                      : "Create Course"}
+                  </span>
                 </button>
               </div>
             </form>
@@ -537,16 +661,21 @@ export default function TutorDashboard() {
 
         {/* My Courses */}
         <div>
-          <h3 className="text-2xl font-bold mb-6">My Courses ({courses.length})</h3>
-          
+          <h3 className="text-2xl font-bold mb-6">
+            My Courses ({courses.length})
+          </h3>
+
           {courses.length === 0 ? (
             <div className="bg-white rounded-2xl p-16 text-center shadow-sm">
               <div className="bg-linear-to-br from-gray-100 to-gray-200 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6">
                 <BookOpen className="h-12 w-12 text-gray-400" />
               </div>
-              <h4 className="text-2xl font-bold text-gray-800 mb-2">No courses yet</h4>
+              <h4 className="text-2xl font-bold text-gray-800 mb-2">
+                No courses yet
+              </h4>
               <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                Start sharing your expertise by creating your first course. It's easy and takes just a few minutes!
+                Start sharing your expertise by creating your first course. It's
+                easy and takes just a few minutes!
               </p>
               <button
                 onClick={() => setShowForm(true)}
@@ -559,7 +688,10 @@ export default function TutorDashboard() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {courses.map((course) => (
-                <div key={course.id} className="bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow">
+                <div
+                  key={course.id}
+                  className="bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow"
+                >
                   <div className="relative h-48 w-full">
                     {course.photos && course.photos.length > 0 ? (
                       <img
@@ -576,7 +708,7 @@ export default function TutorDashboard() {
                       ${course.price}
                     </div>
                   </div>
-                  
+
                   <div className="p-6">
                     <div className="flex items-center gap-2 mb-2">
                       {course.category && (
@@ -592,7 +724,7 @@ export default function TutorDashboard() {
                     <p className="text-gray-600 mb-4 line-clamp-2">
                       {course.description}
                     </p>
-                    
+
                     <div className="flex items-center justify-between text-sm text-gray-600 mb-4">
                       <div className="flex items-center">
                         <Clock className="h-4 w-4 mr-1" />
@@ -600,16 +732,21 @@ export default function TutorDashboard() {
                       </div>
                       <div className="flex items-center">
                         <Users className="h-4 w-4 mr-1" />
-                        {bookings.filter(b => b.course?.title === course.title).length} bookings
+                        {
+                          bookings.filter(
+                            (b) => b.course?.title === course.title
+                          ).length
+                        }{" "}
+                        bookings
                       </div>
                     </div>
-                    
+
                     {course.location && (
                       <div className="text-sm text-gray-500 mb-4">
                         📍 {course.location}
                       </div>
                     )}
-                    
+
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={() => handleViewDetails(course)}
@@ -648,8 +785,8 @@ export default function TutorDashboard() {
               <h3 className="text-2xl font-bold">{selectedCourse.title}</h3>
               <button
                 onClick={() => {
-                  setShowDetails(false)
-                  setSelectedCourse(null)
+                  setShowDetails(false);
+                  setSelectedCourse(null);
                 }}
                 className="p-2 hover:bg-gray-100 rounded-full transition-colors"
               >
@@ -669,11 +806,13 @@ export default function TutorDashboard() {
                     />
                   </div>
                 )}
-                
+
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <span className="text-sm text-gray-500">Category</span>
-                    <p className="font-semibold">{selectedCourse.category?.name}</p>
+                    <p className="font-semibold">
+                      {selectedCourse.category?.name}
+                    </p>
                   </div>
                   <div>
                     <span className="text-sm text-gray-500">Level</span>
@@ -713,26 +852,40 @@ export default function TutorDashboard() {
                   <div className="bg-gray-50 rounded-xl p-12 text-center">
                     <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-600 font-medium">No bookings yet</p>
-                    <p className="text-sm text-gray-500 mt-1">Share your course to get bookings!</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Share your course to get bookings!
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {courseBookings.map((booking) => (
-                      <div key={booking.id} className="border border-gray-200 rounded-xl p-4 hover:border-gray-300 transition-colors">
+                      <div
+                        key={booking.id}
+                        className="border border-gray-200 rounded-xl p-4 hover:border-gray-300 transition-colors"
+                      >
                         <div className="flex items-start justify-between mb-3">
                           <div>
                             <div className="flex items-center gap-2 mb-1">
                               <Users className="h-4 w-4 text-gray-500" />
-                              <span className="font-semibold">{booking.tourist.name}</span>
+                              <span className="font-semibold">
+                                {booking.tourist.name}
+                              </span>
                               <Mail className="h-4 w-4 text-gray-500" />
-                              <span className="text-sm text-gray-600">{booking.tourist.email}</span>
+                              <span className="text-sm text-gray-600">
+                                {booking.tourist.email}
+                              </span>
                             </div>
-                            <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
-                              booking.status === "CONFIRMED" ? "bg-green-100 text-green-700" :
-                              booking.status === "DECLINED" ? "bg-red-100 text-red-700" :
-                              booking.status === "RESCHEDULED" ? "bg-yellow-100 text-yellow-700" :
-                              "bg-blue-100 text-blue-700"
-                            }`}>
+                            <span
+                              className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                                booking.status === "CONFIRMED"
+                                  ? "bg-green-100 text-green-700"
+                                  : booking.status === "DECLINED"
+                                  ? "bg-red-100 text-red-700"
+                                  : booking.status === "RESCHEDULED"
+                                  ? "bg-yellow-100 text-yellow-700"
+                                  : "bg-blue-100 text-blue-700"
+                              }`}
+                            >
                               {booking.status}
                             </span>
                           </div>
@@ -745,12 +898,19 @@ export default function TutorDashboard() {
                         )}
 
                         <div className="mb-3">
-                          <p className="text-sm font-medium text-gray-700 mb-2">Available Times:</p>
+                          <p className="text-sm font-medium text-gray-700 mb-2">
+                            Available Times:
+                          </p>
                           <div className="space-y-1">
                             {booking.options.map((option) => (
-                              <div key={option.id} className="flex items-center text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                              <div
+                                key={option.id}
+                                className="flex items-center text-sm text-gray-600 bg-gray-50 p-2 rounded"
+                              >
                                 <Calendar className="h-4 w-4 mr-2" />
-                                {new Date(option.date).toLocaleDateString()} at {option.time}
+                                {new Date(
+                                  option.date
+                                ).toLocaleDateString()} at {option.time}
                               </div>
                             ))}
                           </div>
@@ -759,14 +919,22 @@ export default function TutorDashboard() {
                         {booking.status === "PENDING" && (
                           <div className="flex gap-2">
                             <button
-                              onClick={() => handleBookingResponse(booking.id, "CONFIRMED", booking.options[0]?.id)}
+                              onClick={() =>
+                                handleBookingResponse(
+                                  booking.id,
+                                  "CONFIRMED",
+                                  booking.options[0]?.id
+                                )
+                              }
                               className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors"
                             >
                               <CheckCircle className="h-4 w-4" />
                               Accept
                             </button>
                             <button
-                              onClick={() => handleBookingResponse(booking.id, "DECLINED")}
+                              onClick={() =>
+                                handleBookingResponse(booking.id, "DECLINED")
+                              }
                               className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors"
                             >
                               <X className="h-4 w-4" />
@@ -784,5 +952,5 @@ export default function TutorDashboard() {
         </div>
       )}
     </div>
-  )
+  );
 }

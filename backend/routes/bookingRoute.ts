@@ -6,6 +6,7 @@ import {
   createBookingController,
   getTouristBookingsController,
   getTutorBookingsController,
+  getBookingsByCourseIdController,
   tutorRespondBookingController,
   rescheduleBookingController,
 } from "../controllers/bookingController";
@@ -39,7 +40,15 @@ router.get(
   getTutorBookingsController
 );
 
-// Tutor: respond to a booking
+// Tutor: view bookings for a specific course (for course detail page)
+router.get(
+  "/course/:courseId",
+  authenticateUser,
+  authorizeTutor,
+  getBookingsByCourseIdController
+);
+
+// Tutor: respond to a booking (accept/reject)
 router.put(
   "/:id/respond",
   authenticateUser,

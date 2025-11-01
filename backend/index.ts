@@ -5,6 +5,7 @@ import cors from "cors";
 import authRoutes from "./routes/authRoutes";
 import courseRoutes from "./routes/courseRoutes";
 import bookingRoutes from "./routes/bookingRoute";
+import categoryRoutes from "./routes/categoryRoutes";
 dotenv.config();
 
 const app: Application = express();
@@ -15,6 +16,7 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/course", courseRoutes);
 app.use("/api/booking", bookingRoutes);
+app.use("/api/category", categoryRoutes);
 
 app.get("/", (req, res) => {
   res.send("Express + Prisma + NeonDB API is running");

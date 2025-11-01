@@ -106,3 +106,11 @@ export const bookingApi = {
     })
   },
 }
+
+// Category API calls
+export const categoryApi = {
+  // Get all categories
+  getAll: async () => {
+    return apiCall('/category')
+  },
+}
